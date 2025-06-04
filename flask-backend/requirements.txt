@@ -1,0 +1,3 @@
+Requirements checklist: 
+1. App.py, has all the methods for the tasks including the add, delete, 
+task, history, and the main methods. 

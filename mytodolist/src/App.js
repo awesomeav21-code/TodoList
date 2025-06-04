@@ -1,53 +1,116 @@
 import React, { Component } from 'react';
 import './App.css';
 
-// Main App component using a class-based structure
 class App extends Component {
   constructor(props) {
     super(props);
-    // Initialize state
     this.state = {
-      tasks: [],               // Stores task objects { id, text, status }
-      newTask: '',             // Current input value for new task
-      newStatus: 'todo',       // Default status for new task
-      draggedTaskId: null,     // Stores the ID of the task being dragged
-      history: []              // Stores strings describing task activity
+      // Always start empty on a fresh React launch
+      tasks: [],
+      newTask: '',
+      newStatus: 'todo',
+      draggedTaskId: null,
+      history: [],
+      currentFrame: ''
     };
   }
 
-  // Helper function to get current time in hh:mm:ss AM/PM format
+  // Returns current time as a string (hh:mm:ss AM/PM)
   getCurrentTime = () => {
     const now = new Date();
     return now.toLocaleTimeString();
   };
 
-  // Handles typing in the task input field
+  // On mounting, do NOT fetch from Flask. Leaving this blank
+  // guarantees the UI starts with tasks=[] and history=[] every time.
+  componentDidMount() {
+    // Intentionally left empty for a blank UI on npm start or full page reload
+  }
+
+  // Handles typing into the "new task" input field
   handleChange = (event) => {
     this.setState({ newTask: event.target.value });
   };
 
-  // Handles selection change for the task's initial status
+  // Handles selecting a status in the dropdown for a new task
   handleStatusChange = (event) => {
     this.setState({ newStatus: event.target.value });
   };
 
-  // Deletes a task and logs the deletion in history
+  // Called when the user clicks "Add Task"
+  // Immediately POSTs the new task and history entry to Flask,
+  // then updates React state so the task appears in the UI.
+  handleAddTask = () => {
+    if (this.state.newTask.trim() === '') {
+      alert('No task entered');
+      return;
+    }
+  
+    const newTask = {
+      id: `task-${Date.now()}`,
+      text: this.state.newTask,
+      status: this.state.newStatus
+    };
+  
+    const time = this.getCurrentTime();
+    const newHistoryEntry = `Task "${newTask.text}" added to ${newTask.status} at ${time}`;
+  
+    // Persist the new task to Flask immediately
+    fetch('http://127.0.0.1:5000/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTask)
+    });
+  
+    // Persist the corresponding history entry immediately
+    fetch('http://127.0.0.1:5000/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: newHistoryEntry, timestamp: time })
+    });
+  
+    // Update local React state so the UI shows the new task and history
+    this.setState({
+      tasks: [...this.state.tasks, newTask],
+      newTask: '',
+      newStatus: 'todo',
+      history: [...this.state.history, newHistoryEntry]
+    });
+  };
+  
+  // Called when the user clicks the "X" button next to a task
+  // Immediately DELETEs the task in Flask and POSTs a history entry,
+  // then updates React state so the task is removed from UI.
   handleDeleteTask = (taskId) => {
-    const updatedTasks = this.state.tasks.filter(task => task.id !== taskId);
     const deletedTask = this.state.tasks.find(task => task.id === taskId);
+    const updatedTasks = this.state.tasks.filter(task => task.id !== taskId);
 
     const time = this.getCurrentTime();
     const newHistoryEntry = deletedTask
       ? `Task "${deletedTask.text}" was deleted from ${deletedTask.status} at ${time}`
       : `A task was deleted at ${time}`;
 
+    // Persist deletion immediately
+    fetch(`http://127.0.0.1:5000/tasks/${taskId}`, {
+      method: 'DELETE'
+    });
+
+    // Persist history entry immediately
+    fetch('http://127.0.0.1:5000/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: newHistoryEntry, timestamp: time })
+    });
+
+    // Update local React state to remove the task and add history
     this.setState({
       tasks: updatedTasks,
       history: [...this.state.history, newHistoryEntry]
     });
   };
 
-  // Resets all state values to initial (clears board and history)
+  // Called when the user clicks "Reset Board" in React.
+  // This only clears the UI (React state), not the backend.
   handleReset = () => {
     this.setState({
       tasks: [],
@@ -58,65 +121,66 @@ class App extends Component {
     });
   };
 
-  // Adds a new task and records its creation time in history
-  handleAddTask = () => {
-    if (this.state.newTask.trim() === '') return;
-
-    const newTask = {
-      id: `task-${Date.now()}`,     // Unique ID using timestamp
-      text: this.state.newTask,
-      status: this.state.newStatus
-    };
-
-    const time = this.getCurrentTime();
-    const newHistoryEntry = `Task "${newTask.text}" added to ${newTask.status} at ${time}`;
-
-    this.setState({
-      tasks: [...this.state.tasks, newTask],
-      newTask: '',
-      newStatus: 'todo',
-      history: [...this.state.history, newHistoryEntry]
-    });
-  };
-
-  // Begins dragging a task — store its ID
+  // Called when dragging begins on a task item: store its ID
   handleDragStart = (taskId) => {
     this.setState({ draggedTaskId: taskId });
   };
 
-  // Allows drop targets to accept dragged items
+  // Required to allow a drop target to accept dragged items
   handleDragOver = (event) => {
     event.preventDefault();
   };
 
-  // Handles dropping a task onto a new status column and logs it
+  // Handles dropping a task into a new column/status.
+  // Immediately PUTs the status change to Flask, POSTs history,
+  // then updates React state so the UI moves the task.
   handleDrop = (newStatus) => {
     const updatedTasks = this.state.tasks.map((task) => {
       if (task.id === this.state.draggedTaskId && task.status !== newStatus) {
         const time = this.getCurrentTime();
         const newHistoryEntry = `Task "${task.text}" moved to ${newStatus} at ${time}`;
+
+        // Persist status update to Flask
+        fetch(`http://127.0.0.1:5000/tasks/${task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        // Persist history entry
+        fetch('http://127.0.0.1:5000/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: newHistoryEntry, timestamp: time })
+        });
+
+        // Update React state’s history
         this.setState({
           history: [...this.state.history, newHistoryEntry]
         });
+
+        // Return a new task object with updated status
         return { ...task, status: newStatus };
       }
       return task;
     });
 
+    // Update React state’s tasks and clear draggedTaskId
     this.setState({ tasks: updatedTasks, draggedTaskId: null });
   };
 
-  // Chooses background color based on task status
+  // Choose background color based on the task’s status
   getTaskColor = (status) => {
-    if (status === 'completed') return '#d4edda';       // Green
-    if (status === 'in-progress') return '#fff3cd';     // Yellow
-    return '#f8d7da';                                   // Red (To Do)
+    if (status === 'completed') return '#d4edda';       // light green
+    if (status === 'in-progress') return '#fff3cd';     // light yellow
+    return '#f8d7da';                                   // light red (todo)
   };
 
-  // Renders each column (To Do, In Progress, Completed)
+  // Renders a column (“To Do”, “In Progress”, or “Completed”)
   renderColumn = (statusLabel, statusKey) => {
     return (
       <div
+        className="column"
         onDragOver={this.handleDragOver}
         onDrop={() => this.handleDrop(statusKey)}
         style={{
@@ -137,6 +201,7 @@ class App extends Component {
                 key={task.id}
                 draggable
                 onDragStart={() => this.handleDragStart(task.id)}
+                className="task"
                 style={{
                   background: this.getTaskColor(task.status),
                   padding: '0.5rem',
@@ -150,19 +215,7 @@ class App extends Component {
                 }}
               >
                 <span>{task.text}</span>
-                <button
-                  onClick={() => this.handleDeleteTask(task.id)}
-                  style={{
-                    marginLeft: '1rem',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'red',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  X
-                </button>
+                <button onClick={() => this.handleDeleteTask(task.id)}>X</button>
               </li>
             ))}
         </ul>
@@ -170,14 +223,14 @@ class App extends Component {
     );
   };
 
-  // Renders the full UI
+  // Render the entire UI
   render() {
     return (
       <div style={{ padding: '2rem' }}>
         <h1>To Do List</h1>
 
-        {/* Input section for new task */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Row: new task input, status selector, Add Task, View History */}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <input
             type="text"
             value={this.state.newTask}
@@ -192,41 +245,33 @@ class App extends Component {
           </select>
 
           <button onClick={this.handleAddTask}>Add Task</button>
+
+          {/* This link always opens the Flask video player at "/" 
+              which persists all tasks in the backend. */}
+          <a href="http://127.0.0.1:5000/" target="_blank" rel="noreferrer">
+            <button>View History</button>
+          </a>
         </div>
 
-        {/* Reset Button */}
+        {/* Reset Board: clears React’s UI state only */}
         <div style={{ marginTop: '1rem' }}>
-          <button
-            onClick={this.handleReset}
-            style={{
-              backgroundColor: '#f2f2f2',
-              border: '1px solid #999',
-              padding: '0.5rem 1rem',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            Reset Board
-          </button>
+          <button onClick={this.handleReset}>Reset Board</button>
         </div>
 
-        {/* Task Columns */}
+        {/* Three columns side by side */}
         <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '2rem' }}>
           {this.renderColumn('To Do', 'todo')}
           {this.renderColumn('In Progress', 'in-progress')}
           {this.renderColumn('Completed', 'completed')}
         </div>
 
-        {/* History Log */}
+        {/* Task History below columns */}
         <div style={{ marginTop: '2rem' }}>
           <h2>Task History</h2>
-          <div style={{
-            maxHeight: '150px',
-            overflowY: 'scroll',
-            border: '1px solid #ccc',
-            padding: '1rem',
-            borderRadius: '4px'
-          }}>
+          <div
+            className="history-container"
+            style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #ccc', padding: '1rem', borderRadius: '4px' }}
+          >
             {this.state.history.length === 0 ? (
               <p>No history yet.</p>
             ) : (

@@ -1,47 +1,53 @@
 import React, { Component } from 'react';
 import './App.css';
 
-// Main App component using a class-based approach
+// Main App component using a class-based structure
 class App extends Component {
   constructor(props) {
     super(props);
-
-    // Initial state setup
+    // Initialize state
     this.state = {
-      tasks: [],               // Array to hold all task objects
-      newTask: '',             // Text input for new task
+      tasks: [],               // Stores task objects { id, text, status }
+      newTask: '',             // Current input value for new task
       newStatus: 'todo',       // Default status for new task
-      draggedTaskId: null,     // ID of task being dragged
-      history: []              // Stores history of task actions
+      draggedTaskId: null,     // Stores the ID of the task being dragged
+      history: []              // Stores strings describing task activity
     };
   }
 
-  // Updates the newTask value as the user types
+  // Helper function to get current time in hh:mm:ss AM/PM format
+  getCurrentTime = () => {
+    const now = new Date();
+    return now.toLocaleTimeString();
+  };
+
+  // Handles typing in the task input field
   handleChange = (event) => {
     this.setState({ newTask: event.target.value });
   };
 
-  // Updates the selected status for the new task
+  // Handles selection change for the task's initial status
   handleStatusChange = (event) => {
     this.setState({ newStatus: event.target.value });
   };
 
-  // Deletes a task and updates history
+  // Deletes a task and logs the deletion in history
   handleDeleteTask = (taskId) => {
     const updatedTasks = this.state.tasks.filter(task => task.id !== taskId);
     const deletedTask = this.state.tasks.find(task => task.id === taskId);
 
+    const time = this.getCurrentTime();
     const newHistoryEntry = deletedTask
-      ? `Task "${deletedTask.text}" was deleted from ${deletedTask.status}`
-      : `A task was deleted`;
-//set the state for the history 
+      ? `Task "${deletedTask.text}" was deleted from ${deletedTask.status} at ${time}`
+      : `A task was deleted at ${time}`;
+
     this.setState({
       tasks: updatedTasks,
       history: [...this.state.history, newHistoryEntry]
     });
   };
 
-  // Resets the board: clears tasks, input, and history
+  // Resets all state values to initial (clears board and history)
   handleReset = () => {
     this.setState({
       tasks: [],
@@ -52,17 +58,18 @@ class App extends Component {
     });
   };
 
-  // Adds a new task to the board and logs the action in history
+  // Adds a new task and records its creation time in history
   handleAddTask = () => {
-    if (this.state.newTask.trim() === '') return;  // Prevent empty task creation
+    if (this.state.newTask.trim() === '') return;
 
     const newTask = {
-      id: `task-${Date.now()}`,         // Unique ID using timestamp
+      id: `task-${Date.now()}`,     // Unique ID using timestamp
       text: this.state.newTask,
       status: this.state.newStatus
     };
 
-    const newHistoryEntry = `Task "${newTask.text}" added to ${newTask.status}`;
+    const time = this.getCurrentTime();
+    const newHistoryEntry = `Task "${newTask.text}" added to ${newTask.status} at ${time}`;
 
     this.setState({
       tasks: [...this.state.tasks, newTask],
@@ -72,21 +79,22 @@ class App extends Component {
     });
   };
 
-  // Called when dragging starts; saves the ID of the dragged task
+  // Begins dragging a task — store its ID
   handleDragStart = (taskId) => {
     this.setState({ draggedTaskId: taskId });
   };
 
-  // Allows dragged items to be dropped on this column
+  // Allows drop targets to accept dragged items
   handleDragOver = (event) => {
     event.preventDefault();
   };
 
-  // Called when a task is dropped into a new column/status
+  // Handles dropping a task onto a new status column and logs it
   handleDrop = (newStatus) => {
     const updatedTasks = this.state.tasks.map((task) => {
       if (task.id === this.state.draggedTaskId && task.status !== newStatus) {
-        const newHistoryEntry = `Task "${task.text}" moved to ${newStatus}`;
+        const time = this.getCurrentTime();
+        const newHistoryEntry = `Task "${task.text}" moved to ${newStatus} at ${time}`;
         this.setState({
           history: [...this.state.history, newHistoryEntry]
         });
@@ -98,14 +106,14 @@ class App extends Component {
     this.setState({ tasks: updatedTasks, draggedTaskId: null });
   };
 
-  // Returns a background color based on task status
+  // Chooses background color based on task status
   getTaskColor = (status) => {
-    if (status === 'completed') return '#d4edda';        // green
-    if (status === 'in-progress') return '#fff3cd';      // yellow
-    return '#f8d7da';                                     // red for todo
+    if (status === 'completed') return '#d4edda';       // Green
+    if (status === 'in-progress') return '#fff3cd';     // Yellow
+    return '#f8d7da';                                   // Red (To Do)
   };
 
-  // Reusable function to render a single column of tasks
+  // Renders each column (To Do, In Progress, Completed)
   renderColumn = (statusLabel, statusKey) => {
     return (
       <div
@@ -162,13 +170,13 @@ class App extends Component {
     );
   };
 
-  // Main render method
+  // Renders the full UI
   render() {
     return (
       <div style={{ padding: '2rem' }}>
         <h1>To Do List</h1>
 
-        {/* Task input and status selection */}
+        {/* Input section for new task */}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             type="text"
@@ -186,7 +194,7 @@ class App extends Component {
           <button onClick={this.handleAddTask}>Add Task</button>
         </div>
 
-        {/* Reset button placed clearly below */}
+        {/* Reset Button */}
         <div style={{ marginTop: '1rem' }}>
           <button
             onClick={this.handleReset}
@@ -202,14 +210,14 @@ class App extends Component {
           </button>
         </div>
 
-        {/* Task columns: To Do, In Progress, Completed */}
+        {/* Task Columns */}
         <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '2rem' }}>
           {this.renderColumn('To Do', 'todo')}
           {this.renderColumn('In Progress', 'in-progress')}
           {this.renderColumn('Completed', 'completed')}
         </div>
 
-        {/* History log */}
+        {/* History Log */}
         <div style={{ marginTop: '2rem' }}>
           <h2>Task History</h2>
           <div style={{

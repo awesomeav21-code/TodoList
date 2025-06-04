@@ -44,9 +44,9 @@ def home():
             position: absolute;
             top: 10px;
             right: 10px;
-            width: 300px;
+            width: 350px;
             height: 85%;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.7);
             color: white;
             overflow-y: auto;
             padding: 1rem;
@@ -56,9 +56,22 @@ def home():
             z-index: 10;
           }
           h2 { margin-top: 0; }
-          ul { list-style: none; margin: 0; padding: 0; }
-          li { padding: 0.25rem 0; }
-          .history-entry { color: #dddddd; font-style: italic; font-size: 0.9rem; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            color: white;
+          }
+          th, td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #ccc;
+            font-size: 0.85rem;
+          }
+          th {
+            background-color: #444;
+            position: sticky;
+            top: 0;
+          }
         </style>
       </head>
       <body>
@@ -71,12 +84,23 @@ def home():
           </video>
 
           <div class="overlay">
-            <h2>History</h2>
-            <ul>
-              {% for h in history_entries %}
-                <li class="history-entry">{{ h.action }} at {{ h.timestamp }}</li>
-              {% endfor %}
-            </ul>
+            <h2>History Table</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for h in history_entries %}
+                  <tr>
+                    <td>{{ h.action }}</td>
+                    <td>{{ h.timestamp }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -88,47 +112,9 @@ def home():
     """
     return render_template_string(html, history_entries=history_entries)
 
-@app.route('/history-view')
-def history_view():
-    history_entries = History.query.all()
-    html = """
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Full History</title>
-        <style>
-          body { font-family: Arial, sans-serif; background:#f9f9f9; padding:2rem; }
-          h1 { color: #333; }
-          ul { list-style: none; padding: 0; }
-          li { padding: 0.5rem 0; border-bottom: 1px solid #ddd; }
-          .timestamp { font-size: 0.9rem; color: #666; }
-        </style>
-      </head>
-      <body>
-        <h1>Task History</h1>
-        <ul>
-          {% for h in history_entries %}
-            <li>
-              <div>{{ h.action }}</div>
-              <div class="timestamp">{{ h.timestamp }}</div>
-            </li>
-          {% endfor %}
-        </ul>
-      </body>
-    </html>
-    """
-    return render_template_string(html, history_entries=history_entries)
-
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory('static', filename)
-
-@app.route('/reset', methods=['POST'])
-def reset_all():
-    Task.query.delete()
-    History.query.delete()
-    db.session.commit()
-    return jsonify({'message': 'All cleared'}), 200
 
 @app.route('/tasks', methods=['GET'])
 def get_tasks():
@@ -151,24 +137,15 @@ def add_task():
 def delete_task(task_id):
     task = Task.query.get(task_id)
     if task:
+        old_status = task.status
         task.status = 'deleted'
         db.session.commit()
         timestamp = datetime.now().strftime("%I:%M:%S %p")
-        action = f'Task "{task.text}" was deleted'
+        action = f'Task "{task.text}" was deleted from {old_status}'
         history_entry = History(action=action, timestamp=timestamp)
         db.session.add(history_entry)
         db.session.commit()
         return jsonify({'message': 'Task marked as deleted'}), 200
-    return jsonify({'message': 'Task not found'}), 404
-
-@app.route('/tasks/<task_id>', methods=['PUT'])
-def update_task(task_id):
-    data = request.get_json()
-    task = Task.query.get(task_id)
-    if task:
-        task.status = data['status']
-        db.session.commit()
-        return jsonify({'message': 'Task updated'}), 200
     return jsonify({'message': 'Task not found'}), 404
 
 @app.route('/history', methods=['GET'])
@@ -183,6 +160,13 @@ def add_history():
     db.session.add(new_entry)
     db.session.commit()
     return jsonify({'message': 'History recorded'}), 201
+
+@app.route('/reset', methods=['POST'])
+def reset_all():
+    Task.query.delete()
+    History.query.delete()
+    db.session.commit()
+    return jsonify({'message': 'All cleared'}), 200
 
 if __name__ == '__main__':
     with app.app_context():

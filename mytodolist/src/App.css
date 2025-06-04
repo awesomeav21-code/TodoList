@@ -1,14 +1,22 @@
+/* Global Styles */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
 body {
-  background-color: #f4f7fa;
+  background: linear-gradient(to bottom right, #f4f7fa, #e8edf3);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
   padding: 0;
 }
 
+/* Headings */
 h1, h2 {
   color: #333;
+  margin-bottom: 1rem;
 }
 
+/* Inputs and Select */
 input[type="text"],
 select {
   padding: 0.5rem;
@@ -26,6 +34,7 @@ select:focus {
   outline: none;
 }
 
+/* Buttons */
 button {
   padding: 0.5rem 1rem;
   border-radius: 8px;
@@ -34,13 +43,18 @@ button {
   background-color: #4a90e2;
   color: white;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, transform 0.1s ease;
 }
 
 button:hover {
   background-color: #357ab8;
 }
 
+button:active {
+  transform: scale(0.98);
+}
+
+/* List Styles */
 ul {
   padding: 0;
   margin: 0;
@@ -54,8 +68,18 @@ li:hover {
   transform: scale(1.02);
 }
 
+/* Columns (Board Layout) */
+.board {
+  display: flex;
+  gap: 2rem;
+  justify-content: space-around;
+  padding: 2rem;
+  flex-wrap: wrap;
+}
+
 .column {
   width: 30%;
+  min-width: 250px;
   min-height: 300px;
   background-color: #ffffff;
   padding: 1rem;
@@ -63,6 +87,11 @@ li:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.column.active {
+  border: 2px solid #4a90e2;
+}
+
+/* Task Card */
 .task {
   background-color: #f9fafb;
   border: 1px solid #ddd;
@@ -74,6 +103,11 @@ li:hover {
   align-items: center;
 }
 
+.task:hover {
+  background-color: #eef3f8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
 .task button {
   background: none;
   color: red;
@@ -82,6 +116,7 @@ li:hover {
   cursor: pointer;
 }
 
+/* History Container */
 .history-container {
   max-height: 200px;
   overflow-y: auto;
@@ -90,4 +125,26 @@ li:hover {
   border-radius: 10px;
   border: 1px solid #ddd;
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Custom Scrollbar */
+.history-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-container::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .board {
+    flex-direction: column;
+  }
+
+  .column {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
 }

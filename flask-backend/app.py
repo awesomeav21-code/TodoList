@@ -24,86 +24,63 @@ class History(db.Model):
 
 @app.route('/')
 def home():
-    history_entries = History.query.all()
+    history_entries = History.query.order_by(History.id.desc()).all()
 
     html = """
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Task History Playback</title>
+        <title>Task History Table</title>
         <style>
-          body { font-family: Arial, sans-serif; background: #f4f7fa; padding: 2rem; }
-          .video-container { position: relative; width: 640px; margin-bottom: 1rem; }
-          video {
-            width: 100%;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            display: block;
+          body {
+            font-family: Arial, sans-serif;
+            background: #f4f7fa;
+            padding: 2rem;
           }
-          .overlay {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 350px;
-            height: 85%;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            overflow-y: auto;
-            padding: 1rem;
-            box-sizing: border-box;
-            border-radius: 8px;
-            pointer-events: auto;
-            z-index: 10;
+          h1 {
+            margin-bottom: 1rem;
           }
-          h2 { margin-top: 0; }
           table {
             width: 100%;
             border-collapse: collapse;
-            color: white;
+            background: white;
+            color: black;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
           }
           th, td {
-            padding: 0.5rem;
+            padding: 0.75rem;
             text-align: left;
             border-bottom: 1px solid #ccc;
-            font-size: 0.85rem;
           }
           th {
             background-color: #444;
-            position: sticky;
-            top: 0;
+            color: white;
+          }
+          tr:hover {
+            background-color: #f1f1f1;
           }
         </style>
       </head>
       <body>
-        <h1>Task History Playback</h1>
-
-        <div class="video-container">
-          <video controls>
-            <source src="/static/sample.mp4" type="video/mp4">
-            Your browser does not support the video tag.
-          </video>
-
-          <div class="overlay">
-            <h2>History Table</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Action</th>
-                  <th>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for h in history_entries %}
-                  <tr>
-                    <td>{{ h.action }}</td>
-                    <td>{{ h.timestamp }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
+        <h1>Task History Table</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in history_entries %}
+              <tr>
+                <td>{{ h.action }}</td>
+                <td>{{ h.timestamp }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
         <script>
           setInterval(() => location.reload(), 10000);
         </script>
@@ -123,34 +100,48 @@ def get_tasks():
 
 @app.route('/tasks', methods=['POST'])
 def add_task():
+    if not request.is_json:
+        return jsonify({'error': 'Request content-type must be application/json'}), 400
+
     data = request.get_json()
-    task = Task(id=data['id'], text=data['text'], status=data['status'])
-    db.session.add(task)
+    if not data or 'id' not in data or 'text' not in data or 'status' not in data:
+        return jsonify({'error': 'Missing required task fields'}), 400
+
     try:
+        task = Task(id=data['id'], text=data['text'], status=data['status'])
+        db.session.add(task)
         db.session.commit()
         return jsonify({'message': 'Task added'}), 201
     except IntegrityError:
         db.session.rollback()
         return jsonify({'error': 'Duplicate ID'}), 409
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/tasks/<task_id>', methods=['DELETE'])
 def delete_task(task_id):
     task = Task.query.get(task_id)
     if task:
         old_status = task.status
-        task.status = 'deleted'
-        db.session.commit()
+        text = task.text
+
+        db.session.delete(task)
+
+        # Log deletion to history
         timestamp = datetime.now().strftime("%I:%M:%S %p")
-        action = f'Task "{task.text}" was deleted from {old_status}'
+        action = f'Task "{text}" deleted from {old_status}'
         history_entry = History(action=action, timestamp=timestamp)
+
         db.session.add(history_entry)
         db.session.commit()
-        return jsonify({'message': 'Task marked as deleted'}), 200
+
+        return jsonify({'message': 'Task deleted and logged'}), 200
     return jsonify({'message': 'Task not found'}), 404
 
 @app.route('/history', methods=['GET'])
 def get_history():
-    history = History.query.all()
+    history = History.query.order_by(History.id.desc()).all()
     return jsonify([{'action': h.action, 'timestamp': h.timestamp} for h in history])
 
 @app.route('/history', methods=['POST'])
@@ -160,6 +151,29 @@ def add_history():
     db.session.add(new_entry)
     db.session.commit()
     return jsonify({'message': 'History recorded'}), 201
+
+@app.route('/tasks/<task_id>', methods=['PUT'])
+def update_task_status(task_id):
+    data = request.get_json()
+    if not data or 'status' not in data:
+        return jsonify({'error': 'Missing status field'}), 400
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Task not found'}), 404
+
+    old_status = task.status
+    task.status = data['status']
+    db.session.commit()
+
+    if old_status != data['status']:
+        timestamp = datetime.now().strftime("%I:%M:%S %p")
+        action = f'Task "{task.text}" moved to {data["status"]}'
+        history_entry = History(action=action, timestamp=timestamp)
+        db.session.add(history_entry)
+        db.session.commit()
+
+    return jsonify({'message': 'Status updated'}), 200
 
 @app.route('/reset', methods=['POST'])
 def reset_all():
@@ -171,4 +185,4 @@ def reset_all():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5050)
